@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Visitor Search</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+
+body{
+font-family:Segoe UI,Arial,sans-serif;
+background:#f4f7fb;
+margin:0;
+padding:20px;
+}
+
+.header{
+background:#1e3a8a;
+color:white;
+padding:20px;
+border-radius:12px;
+margin-bottom:20px;
+display:flex;
+justify-content:space-between;
+align-items:center;
+}
+
+.section{
+background:white;
+padding:20px;
+border-radius:12px;
+margin-bottom:20px;
+box-shadow:0 2px 10px rgba(0,0,0,0.08);
+}
+
+input{
+width:320px;
+padding:12px;
+border:1px solid #ccc;
+border-radius:8px;
+font-size:15px;
+margin-bottom:10px;
+}
+
+button{
+background:#2563eb;
+color:white;
+border:none;
+padding:10px 18px;
+border-radius:8px;
+cursor:pointer;
+}
+
+button:hover{
+background:#1d4ed8;
+}
+
+.result-card{
+background:#f8fafc;
+border-left:4px solid #2563eb;
+padding:15px;
+margin-top:10px;
+border-radius:8px;
+}
+
+#messageBox{
+display:none;
+padding:15px;
+border-radius:10px;
+margin-bottom:15px;
+font-weight:bold;
+}
+
+.success{
+background:#dcfce7;
+color:#166534;
+border:1px solid #86efac;
+}
+
+.error{
+background:#fee2e2;
+color:#991b1b;
+border:1px solid #fca5a5;
+}
+
+
+</style>
+</head>
+
+<body>
+
+<div class="header">
+
+<div>
+
+<h1>
+🎟 Event Visitor Management
+</h1>
+
+<p>
+Registration • QR • Verification • Dashboard
+</p>
+
+</div>
+
+
+
+<div>
+
+<a href="dashboard.html" target="_blank">
+
+<button>
+📊 Open Dashboard
+</button>
+
+</a>
+
+</div>
+
+</div>
+
+<div id="messageBox"></div>
+
+<div class="section">
+
+<h2>🔍 Visitor Search</h2>
+
+<input
+id="searchBox"
+placeholder="Search Name / Mobile / Company / Visitor ID">
+
+<button
+id="searchBtn"
+onclick="searchVisitor()">
+Search
+</button>
+
+<div id="result"></div>
+
+</div>
+<div class="section">
+
+<h2>📝 New Visitor Registration</h2>
+
+<input id="name" placeholder="Visitor Name"><br>
+
+<input id="mobile" placeholder="Mobile Number"><br>
+
+<input id="company" placeholder="Company"><br>
+
+<input id="designation" placeholder="Designation"><br>
+
+<input
+type="file"
+id="photo"
+accept="image/*"
+capture="environment">
+
+<button
+id="saveBtn"
+onclick="registerVisitor()">
+💾 Save Visitor
+</button>
+
+<br><br>
+
+<h3>QR Preview</h3>
+
+<div id="newVisitorQR"></div>
+
+<br>
+
+<button
+id="printNewQR"
+style="display:none;"
+onclick="printQR('newVisitorQR')">
+
+🖨 Print QR
+
+</button>
+
+</div>
+
+<div class="section">
+
+<h2>📂 Bulk CSV Upload</h2>
+
+<input
+type="file"
+id="csvFile"
+accept=".csv">
+
+<br><br>
+
+<button
+onclick="uploadCSV()">
+Upload CSV
+</button>
+
+<button onclick="exportAttendance()">
+📥 Export Attendance CSV
+</button>
+
+</div>
+
+<script>
+
+const SUPABASE_URL =
+'https://jffrobtbkywciulkukws.supabase.co';
+
+const SUPABASE_KEY =
+'sb_publishable_QC80NvmijShSDjgPLH6NNA_a4GtfG7w';
+
+const client =
+supabase.createClient(
+SUPABASE_URL,
+SUPABASE_KEY
+);
+
+async function searchVisitor(){
+
+document.getElementById('searchBtn').innerText =
+'Searching...';
+
+const keyword =
+document.getElementById('searchBox').value;
+
+const { data, error } =
+await client
+.from('visitors')
+.select('*')
+.or(
+`name.ilike.%${keyword}%,company.ilike.%${keyword}%,mobile.ilike.%${keyword}%,visitor_id.ilike.%${keyword}%`
+);
+let html='';
+
+if(data && data.length){
+
+data.forEach(row=>{
+
+html += `
+<div class="result-card">
+
+${
+row.photo_url
+?
+`<img
+src="${row.photo_url}"
+style="
+width:100px;
+height:100px;
+object-fit:cover;
+border-radius:10px;
+margin-bottom:10px;
+">`
+:
+''
+}
+
+<h3>${row.name}</h3>
+
+Mobile : ${row.mobile}<br>
+Company : ${row.company}<br>
+Designation : ${row.designation}<br>
+Visitor ID : ${row.visitor_id}<br><br>
+
+<button
+onclick="generateQR('${row.visitor_id}')">
+📱 Generate QR
+</button>
+
+<button
+onclick="printQR('qr_${row.visitor_id}')">
+🖨 Print
+</button>
+
+<div id="qr_${row.visitor_id}"></div>
+
+</div>
+`;
+});
+
+}
+else{
+
+html='No Record Found';
+
+}
+
+document.getElementById('result').innerHTML=html;
+
+document.getElementById('searchBtn').innerText =
+'Search';
+
+}
+
+function showMessage(text,type){
+
+const box =
+document.getElementById('messageBox');
+
+box.style.display='block';
+
+box.className = '';
+
+box.classList.add(type);
+
+box.innerText = text;
+
+setTimeout(()=>{
+
+box.style.display='none';
+
+},4000);
+
+}
+
+async function uploadPhoto(file,visitorId){
+
+const fileName =
+visitorId + '_' + Date.now() + '.jpg';
+
+const { data,error } =
+await client.storage
+.from('visitor-photos')
+.upload(fileName,file);
+
+if(error){
+return '';
+}
+
+const { data:urlData } =
+client.storage
+.from('visitor-photos')
+.getPublicUrl(fileName);
+
+return urlData.publicUrl;
+
+}
+
+async function registerVisitor(){
+
+document.getElementById('saveBtn').innerText =
+'Saving...';
+
+document.getElementById('saveBtn').disabled =
+true;
+
+const mobile =
+document.getElementById('mobile').value;
+
+const { data: existing } =
+await client
+.from('visitors')
+.select('*')
+.eq('mobile', mobile);
+
+if(existing && existing.length > 0){
+
+document.getElementById('saveBtn').innerText =
+'💾 Save Visitor';
+
+document.getElementById('saveBtn').disabled =
+false;
+
+
+showMessage(
+'⚠ Visitor Already Exists : ' +
+existing[0].name,
+'error'
+);
+
+return;
+
+}
+
+const { data:maxRow } =
+await client
+.from('visitors')
+.select('serial_no')
+.order('serial_no',{ascending:false})
+.limit(1);
+
+let nextNumber = 1;
+
+if(maxRow && maxRow.length){
+nextNumber = maxRow[0].serial_no + 1;
+}
+
+const visitorId =
+'VST-' +
+String(nextNumber).padStart(5,'0');
+
+const photoFile =
+document.getElementById('photo').files[0];
+
+let photoUrl = '';
+
+if(photoFile){
+
+photoUrl =
+await uploadPhoto(
+photoFile,
+visitorId
+);
+
+}
+
+const { error } =
+await client
+.from('visitors')
+.insert([
+{
+visitor_id: visitorId,
+name: document.getElementById('name').value,
+mobile: mobile,
+company: document.getElementById('company').value,
+designation: document.getElementById('designation').value,
+registration_type: 'Walk-In',
+photo_url: photoUrl
+}
+]);
+
+if(error){
+
+document.getElementById('saveBtn').innerText =
+'💾 Save Visitor';
+
+document.getElementById('saveBtn').disabled =
+false;
+
+alert(error.message);
+
+}else{
+
+document.getElementById('saveBtn').innerText =
+'💾 Save Visitor';
+
+document.getElementById('saveBtn').disabled =
+false;
+
+showMessage(
+'✅ Visitor Saved : ' + visitorId,
+'success'
+);
+
+generateNewVisitorQR(visitorId);
+
+document.getElementById('name').value='';
+document.getElementById('mobile').value='';
+document.getElementById('company').value='';
+document.getElementById('designation').value='';
+
+}
+
+}
+
+function generateQR(visitorId){
+
+const qrContainer =
+document.getElementById(
+'qr_' + visitorId
+);
+
+qrContainer.innerHTML='';
+
+const qrUrl =
+'https://stately-churros-b0fb60.netlify.app/verify.html?id='
++ visitorId;
+
+new QRCode(
+qrContainer,
+{
+text: qrUrl,
+width: 250,
+height: 250
+}
+);
+
+}
+
+function generateNewVisitorQR(visitorId){
+
+const qrContainer =
+document.getElementById('newVisitorQR');
+
+qrContainer.innerHTML='';
+
+const qrUrl =
+'https://stately-churros-b0fb60.netlify.app/verify.html?id='
++ visitorId;
+
+new QRCode(
+qrContainer,
+{
+text: qrUrl,
+width:250,
+height:250
+}
+);
+
+document.getElementById(
+'printNewQR'
+).style.display='inline-block';
+
+}
+function printQR(divId){
+
+const printContents =
+document.getElementById(divId).innerHTML;
+
+const win =
+window.open('', '', 'height=600,width=600');
+
+win.document.write(printContents);
+
+win.document.close();
+
+win.print();
+
+}
+
+async function exportAttendance(){
+
+const { data, error } =
+await client
+.from('visitors')
+.select('*')
+.eq('entry_status','Entered');
+
+if(error){
+
+alert(error.message);
+return;
+
+}
+
+let csv =
+'Visitor ID,Name,Mobile,Company,Designation,Entry Time\n';
+
+data.forEach(row=>{
+
+csv +=
+`${row.visitor_id},"${row.name}","${row.mobile}","${row.company}","${row.designation}","${row.entry_time}"\n`;
+
+});
+
+const blob =
+new Blob([csv],{
+type:'text/csv'
+});
+
+const url =
+window.URL.createObjectURL(blob);
+
+const a =
+document.createElement('a');
+
+a.href = url;
+
+a.download =
+'attendance_report.csv';
+
+a.click();
+
+window.URL.revokeObjectURL(url);
+
+showMessage(
+'📥 Attendance CSV Downloaded',
+'success'
+);
+
+}
+
+async function uploadCSV(){
+
+const file =
+document.getElementById('csvFile').files[0];
+
+if(!file){
+
+alert('Please Select CSV File');
+return;
+
+}
+
+
+Papa.parse(file, {
+
+header:true,
+skipEmptyLines:true,
+
+
+complete: async function(results){
+
+let imported = 0;
+let skipped = 0;
+
+const { data:maxRow } =
+await client
+.from('visitors')
+.select('serial_no')
+.order('serial_no',{ascending:false})
+.limit(1);
+
+let nextNumber = 1;
+
+if(maxRow && maxRow.length){
+nextNumber = maxRow[0].serial_no + 1;
+}
+
+for(const row of results.data){
+
+const mobile =
+String(row.Mobile || '').trim();
+
+if(!mobile){
+skipped++;
+continue;
+}
+
+const { data: existing } =
+await client
+.from('visitors')
+.select('mobile')
+.eq('mobile', mobile)
+.limit(1);
+
+if(existing && existing.length){
+skipped++;
+continue;
+}
+
+const visitorId =
+'VST-' +
+String(nextNumber).padStart(5,'0');
+
+nextNumber++;
+
+const { error } =
+await client
+.from('visitors')
+.insert([
+{
+visitor_id: visitorId,
+name: row.Name || '',
+mobile: mobile,
+company: row.Company || '',
+designation: row.Designation || '',
+registration_type: 'Pre Registered'
+}
+]);
+
+if(error){
+skipped++;
+}else{
+imported++;
+}
+
+}
+
+showMessage(
+'📂 Imported : ' +
+imported +
+' | Skipped : ' +
+skipped,
+'success'
+);
+
+}
+
+});
+
+}
+
+
+</script>
+
+</body>
+</html>

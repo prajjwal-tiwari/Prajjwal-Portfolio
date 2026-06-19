@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+<meta charset="utf-8">
+
+<title>Gate Scanner</title>
+
+<script src="https://unpkg.com/html5-qrcode"></script>
+
+<style>
+
+body{
+font-family:Arial;
+padding:20px;
+background:#f4f7fb;
+}
+
+h1{
+text-align:center;
+}
+
+#reader{
+width:100%;
+max-width:500px;
+margin:auto;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<h1>🎟 Gate Scanner</h1>
+
+<div id="reader"></div>
+
+<script>
+
+function onScanSuccess(decodedText){
+
+window.location.href = decodedText;
+
+}
+
+const html5QrCode =
+new Html5QrcodeScanner(
+"reader",
+{
+fps:10,
+qrbox:250
+}
+);
+
+html5QrCode.render(
+onScanSuccess
+);
+
+</script>
+
+</body>
+
+</html>

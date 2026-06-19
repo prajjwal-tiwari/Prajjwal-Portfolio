@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+<style>
+
+body{
+
+font-family:Arial,sans-serif;
+background:#f4f7fb;
+margin:0;
+padding:20px;
+
+}
+
+.header{
+
+background:#1F4E78;
+color:white;
+padding:20px;
+border-radius:12px;
+text-align:center;
+
+animation:fadeIn 1s;
+
+}
+
+.headerSummary{
+
+background:#28a745;
+color:white;
+padding:15px;
+border-radius:10px;
+margin-top:15px;
+text-align:center;
+
+}
+
+.cards{
+
+display:grid;
+grid-template-columns:1fr 1fr;
+gap:15px;
+margin-top:20px;
+
+}
+
+.card{
+
+background:white;
+padding:20px;
+border-radius:12px;
+box-shadow:0 2px 10px rgba(0,0,0,.1);
+
+animation:slideUp .7s;
+
+}
+
+.value{
+
+font-size:28px;
+font-weight:bold;
+margin-top:10px;
+
+}
+
+.ready{
+
+color:green;
+
+}
+
+.buttonBar{
+
+margin-top:25px;
+text-align:center;
+
+}
+
+button{
+
+padding:12px 25px;
+margin:8px;
+border:none;
+border-radius:8px;
+cursor:pointer;
+font-size:15px;
+
+}
+
+.scrub{
+
+background:#1F4E78;
+color:white;
+
+}
+
+.reset{
+
+background:#d9534f;
+color:white;
+
+}
+
+.test{
+
+background:#5cb85c;
+color:white;
+
+}
+
+@keyframes slideUp{
+
+from{
+transform:translateY(20px);
+opacity:0;
+}
+
+to{
+transform:translateY(0);
+opacity:1;
+}
+
+}
+
+@keyframes fadeIn{
+
+from{
+opacity:0;
+}
+
+to{
+opacity:1;
+}
+
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="header">
+
+<h1>BOM SCRUBBER V1.0</h1>
+
+<p>Automated Component Validation Tool</p>
+
+</div>
+
+<div id="loader"
+style="
+display:none;
+background:#ffc107;
+color:black;
+padding:12px;
+border-radius:10px;
+margin-top:15px;
+text-align:center;
+font-weight:bold;
+font-size:18px;
+position:sticky;
+top:10px;
+z-index:9999;">
+
+⏳ Processing...
+
+
+</div>
+
+<div class="headerSummary">
+
+<h2 id="summaryText">
+
+READY TO SCRUB
+
+</h2>
+
+</div>
+
+<div class="cards">
+
+<div class="card">
+
+<h3>DigiKey API</h3>
+
+<div class="value ready" id="api">
+
+READY
+
+</div>
+
+</div>
+
+<div class="card">
+
+<h3>Cache System</h3>
+
+<div class="value ready">
+
+READY
+
+</div>
+
+</div>
+
+<div class="card">
+
+<h3>Total Parts</h3>
+
+<div class="value" id="parts">
+
+0
+
+</div>
+
+</div>
+
+<div class="card">
+
+<h3>Description Match</h3>
+
+<div class="value" id="descMatch">
+
+0
+
+</div>
+
+</div>
+
+<div class="card">
+
+<h3>Description Mismatch</h3>
+
+<div class="value" id="descMismatch">
+
+0
+
+</div>
+
+</div>
+
+<div class="card">
+
+<h3>Package Match</h3>
+
+<div class="value" id="packageMatch">
+
+0
+
+</div>
+
+</div>
+
+<div class="card">
+
+<h3>Package Mismatch</h3>
+
+<div class="value" id="packageMismatch">
+
+0
+
+</div>
+
+</div>
+
+<div class="card">
+
+<h3>Datasheets</h3>
+
+<div class="value" id="datasheets">
+
+0
+
+</div>
+
+</div>
+
+<div class="card">
+
+<h3>Version</h3>
+
+<div class="value">
+
+1.0
+
+</div>
+
+</div>
+
+<div class="card">
+
+<h3>Last Run</h3>
+
+<div class="value"
+id="lastRun">
+
+NA
+
+</div>
+
+</div>
+
+<div class="card">
+
+<h3>Current Status</h3>
+
+<div class="value ready"
+id="statusCard">
+
+READY
+
+</div>
+
+</div>
+
+</div>
+
+
+
+<div class="buttonBar">
+
+<button
+class="scrub"
+onclick="runScrub()">
+
+FULL SCRUB
+
+</button>
+
+<button
+class="reset"
+onclick="showLoader('⏳ Resetting Tool...');google.script.run.resetBomScrubber()">
+
+RESET TOOL
+
+</button>
+
+<button
+class="test"
+onclick="showLoader('⏳ Testing DigiKey API...');google.script.run.testApiStatus()">
+
+TEST API
+
+</button>
+
+<button
+class="test"
+onclick="showLoader('⏳ Opening Output Sheet...');openScrubOutput()">
+
+OPEN REPORT
+
+</button>
+
+<button
+class="scrub"
+onclick="showLoader('⏳ Preparing Report...');downloadScrubReport()">
+
+DOWNLOAD SCRUB REPORT
+
+</button>
+
+<button
+class="test"
+onclick="validateBom()">
+
+VALIDATE BOM
+
+</button>
+
+<button
+class="scrub"
+onclick="showLoader('⏳ Converting BOM...');google.script.run.convertImportedBom()">
+
+CONVERT TO BOM_INPUT
+
+</button>
+
+<button
+class="scrub"
+onclick="showLoader('⏳ Smart Scrub Running...');google.script.run.smartScrub()">
+
+SMART SCRUB
+
+</button>
+
+<button
+class="test"
+onclick="google.script.run.showUploadBom()">
+
+UPLOAD BOM
+
+</button>
+
+
+</div>
+
+<script>
+  
+
+function showLoader(message){
+
+  document.getElementById(
+    "loader"
+  ).style.display = "block";
+
+  document.getElementById(
+    "loader"
+  ).innerHTML = message;
+
+  document.getElementById(
+    "statusCard"
+  ).innerHTML = "RUNNING";
+
+  document.getElementById(
+  "statusCard"
+).style.color = "orange";
+
+}
+
+function validateBom(){
+
+  showLoader(
+    "⏳ Validating BOM..."
+  );
+
+  google.script.run
+  .withSuccessHandler(function(){
+
+    hideLoader();
+
+  })
+  .validateImportedBom();
+
+}
+
+function hideLoader(){
+
+  document.getElementById(
+    "loader"
+  ).style.display = "none";
+
+  document.getElementById(
+    "statusCard"
+  ).innerHTML = "COMPLETED";
+
+  document.getElementById(
+    "statusCard"
+  ).style.color = "green";
+
+}
+
+google.script.run
+.withSuccessHandler(loadData)
+.getDashboardData();
+
+function loadData(data){
+
+document.getElementById("api")
+.innerHTML=data.api;
+
+document.getElementById("parts")
+.innerHTML=data.totalParts;
+
+document.getElementById("descMatch")
+.innerHTML =
+data.descMatch;
+
+document.getElementById("descMismatch")
+.innerHTML =
+data.descMismatch;
+
+document.getElementById("packageMatch")
+.innerHTML =
+data.packageMatch;
+
+document.getElementById("packageMismatch")
+.innerHTML =
+data.packageMismatch;
+
+document.getElementById("datasheets")
+.innerHTML=data.datasheets;
+
+document.getElementById("lastRun")
+.innerHTML = data.lastRun;
+
+document.getElementById(
+"summaryText"
+).innerHTML =
+
+"Processed : " +
+data.totalParts +
+
+" | Desc Mismatch : " +
+data.descMismatch +
+
+" | Package Mismatch : " +
+data.packageMismatch;
+
+document.getElementById(
+"statusCard"
+).innerHTML = "READY";
+
+}
+
+google.script.run
+  .withSuccessHandler(loadData)
+  .getDashboardData();
+
+  
+
+function runScrub(){
+
+  showLoader(
+    "⏳ BOM Scrubbing In Progress..."
+  );
+
+  google.script.run
+
+  .withSuccessHandler(function(){
+
+    hideLoader();
+
+    alert(
+      "✅ BOM Scrubbing Completed"
+    );
+
+    // google.script.host.close();
+
+    // google.script.run.showDashboard();
+
+  })
+
+  .fullScrub();
+
+}
+
+function downloadScrubReport(){
+
+  google.script.run
+    .withSuccessHandler(function(url){
+
+      window.open(
+        url,
+        "_blank"
+      );
+
+    })
+    .exportScrubReport();
+
+}
+
+
+function openScrubOutput(){
+
+  google.script.run.openScrubOutput();
+
+}
+
+function showError(){
+
+  document.getElementById(
+    "statusCard"
+  ).innerHTML = "FAILED";
+
+  document.getElementById(
+    "statusCard"
+  ).style.color = "red";
+
+}
+
+</script>
+
+</body>
+</html>

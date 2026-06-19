@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+<meta charset="utf-8">
+<title>Visitor Verification</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+</head>
+
+<body>
+
+<h1>Visitor Verification</h1>
+
+<div id="result">
+Checking...
+</div>
+
+<script>
+
+const SUPABASE_URL =
+'https://jffrobtbkywciulkukws.supabase.co';
+
+const SUPABASE_KEY =
+'sb_publishable_QC80NvmijShSDjgPLH6NNA_a4GtfG7w';
+
+const client =
+supabase.createClient(
+SUPABASE_URL,
+SUPABASE_KEY
+);
+
+const params =
+new URLSearchParams(
+window.location.search
+);
+
+const visitorId =
+params.get('id');
+
+loadVisitor();
+
+async function loadVisitor(){
+
+const { data, error } =
+await client
+.from('visitors')
+.select('*')
+.eq('visitor_id', visitorId)
+.limit(1);
+
+if(error){
+document.getElementById('result').innerHTML =
+`<h2>❌ ERROR</h2><p>${error.message}</p>`;
+return;
+}
+
+if(data && data.length){
+
+if(data[0].entry_status === 'Entered'){
+
+document.getElementById('result').innerHTML =
+`
+<h2>⚠ ALREADY ENTERED</h2>
+
+${
+data[0].photo_url
+?
+`<img
+src="${data[0].photo_url}"
+style="
+width:150px;
+height:150px;
+object-fit:cover;
+border-radius:10px;
+margin-bottom:10px;
+">`
+:
+''
+}
+
+<p><b>Name:</b>
+${data[0].name}</p>
+
+<p><b>Visitor ID:</b>
+${data[0].visitor_id}</p>
+
+<p><b>First Entry:</b>
+${data[0].entry_time}</p>
+`;
+
+return;
+
+}
+
+await client
+.from('scan_logs')
+.insert([
+{
+visitor_id: visitorId
+}
+]);
+
+await client
+.from('visitors')
+.update({
+entry_status:'Entered',
+entry_time:new Date().toISOString()
+})
+.eq('visitor_id', visitorId);
+
+document.getElementById('result').innerHTML =
+`
+<h2>✅ ENTRY SUCCESS</h2>
+
+${
+data[0].photo_url
+?
+`<img
+src="${data[0].photo_url}"
+style="
+width:150px;
+height:150px;
+object-fit:cover;
+border-radius:10px;
+margin-bottom:10px;
+">`
+:
+''
+}
+
+<p><b>Name:</b>
+${data[0].name}</p>
+
+<p><b>Mobile:</b>
+${data[0].mobile}</p>
+
+<p><b>Company:</b>
+${data[0].company}</p>
+
+<p><b>Designation:</b>
+${data[0].designation}</p>
+
+<p><b>Visitor ID:</b>
+${data[0].visitor_id}</p>
+`;
+
+}
+else{
+
+document.getElementById('result').innerHTML =
+`
+<h2>❌ NO MATCH FOUND</h2>
+
+
+`;
+
+}
+
+}
+
+</script>
+
+</body>
+</html>

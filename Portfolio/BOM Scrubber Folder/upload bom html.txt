@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<style>
+
+body{
+font-family:Arial,sans-serif;
+background:#f4f7fb;
+padding:25px;
+text-align:center;
+}
+
+.container{
+background:white;
+padding:30px;
+border-radius:15px;
+box-shadow:0 3px 15px rgba(0,0,0,.15);
+}
+
+h2{
+color:#1F4E78;
+margin-bottom:10px;
+}
+
+.subtitle{
+color:#666;
+margin-bottom:25px;
+}
+
+.uploadBox{
+border:2px dashed #1F4E78;
+padding:40px;
+border-radius:12px;
+background:#fafcff;
+cursor:pointer;
+}
+
+.uploadBox:hover{
+background:#eef5ff;
+}
+
+input[type=file]{
+margin-top:15px;
+}
+
+button{
+background:#1F4E78;
+color:white;
+border:none;
+padding:12px 25px;
+border-radius:8px;
+cursor:pointer;
+font-size:15px;
+margin-top:20px;
+}
+
+.status{
+margin-top:20px;
+font-weight:bold;
+color:green;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="container">
+
+<h2>📁 Upload BOM</h2>
+
+<div class="subtitle">
+Select Excel BOM File (.xlsx)
+</div>
+
+<div class="uploadBox">
+
+📄 Choose BOM File
+
+<br><br>
+
+<input
+type="file"
+id="bomFile"
+accept=".xlsx">
+
+</div>
+
+<button
+onclick="uploadBomFile()">
+
+UPLOAD BOM
+
+</button>
+
+<div
+class="status"
+id="status">
+
+Waiting For File...
+
+</div>
+
+</div>
+
+<script>
+
+function uploadBomFile(){
+
+  const file =
+    document.getElementById(
+      "bomFile"
+    ).files[0];
+
+  if(!file){
+
+    document.getElementById(
+      "status"
+    ).innerHTML =
+    "❌ Please Select BOM File";
+
+    return;
+
+  }
+
+  document.getElementById(
+    "status"
+  ).innerHTML =
+  "✅ File Selected : " +
+  file.name;
+
+}
+
+</script>
+
+</body>
+
+</html>

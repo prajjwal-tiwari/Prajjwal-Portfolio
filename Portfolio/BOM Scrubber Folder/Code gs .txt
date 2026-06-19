@@ -1,0 +1,1573 @@
+function parseMfgInfo(mfgInfo) {
+
+  if (!mfgInfo) {
+    return ["","",""];
+  }
+
+  let parts = mfgInfo.split(",");
+
+  let mfrCode = "";
+  let mfr = "";
+  let mpn = "";
+
+  if(parts.length >= 3){
+
+    mfrCode = parts[0].trim();
+
+    mpn = parts[parts.length - 1].trim();
+
+    mfr = parts.slice(1, parts.length - 1)
+               .join(",")
+               .trim();
+  }
+
+  return [mfrCode, mfr, mpn];
+}
+
+function testParse() {
+
+  let sample =
+  "M0010, KOA SPEER ELECTRONICS, INC, RK73H1ETTP1692F";
+
+  let result = parseMfgInfo(sample);
+
+  Logger.log(result);
+}
+
+function createOutputHeaders() {
+
+  const sheet =
+  SpreadsheetApp.getActiveSpreadsheet()
+  .getSheetByName("SCRUB_OUTPUT");
+
+  sheet.clear();
+
+  const headers = [
+
+    "ERP PART NUMBER",
+    "ERP DESCRIPTION",
+    "QTY",
+    "MSL VALUE IN ERP",
+    "ITEM COMMENTS",
+    "REPLACE ERP PART NUMBERS",
+
+    "MFR CODE",
+    "MFR",
+    "MPN",
+
+    "PACKAGING",
+    "EN DES VS PART DES",
+    "EN DES VS ALT. PART DES",
+    "UNIQUE PACKAGE",
+    "PART STATUS",
+    "MSL",
+    "MAX SOLDERING TEMPERATURE",
+    "REMARKS",
+    "DATASHEET SOURCE",
+    "DATASHEET LINK",
+    "DIGIKEY SEARCH"
+
+  ];
+
+  sheet.getRange(1,1,1,headers.length)
+       .setValues([headers]);
+
+}
+
+function processBom() {
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  const bomSheet = ss.getSheetByName("BOM_INPUT");
+  const outputSheet = ss.getSheetByName("SCRUB_OUTPUT");
+
+  const data = bomSheet.getDataRange().getValues();
+
+  const token = getDigikeyToken();
+
+  let outputRows = [];
+
+  for (let r = 1; r < data.length; r++) {
+
+    let row = data[r];
+
+    let partNo = row[0];         // A
+    let description = row[3];    // D
+    let qty = row[5];            // F
+    let mfgInfo = row[13];       // N
+    let msl = row[16];           // Q
+    let itemComments = row[21];  // V
+    let replaceItems = row[23];  // X
+
+    if (!partNo) {
+      continue;
+    }
+
+    let parsed = parseMfgInfo(mfgInfo);
+
+    let digikeyLink = getDigikeyLink(parsed[2]);
+
+    let digikeyFormula =
+      '=HYPERLINK("' + digikeyLink + '","Open DigiKey")';
+
+    let packageType = getPackage(description);
+
+    let digiData =
+      getDigikeyPartData(parsed[2], token);
+
+    let descMatch = "";
+    let packageMatch = "";
+
+    if (digiData && digiData.description) {
+
+      descMatch =
+        compareDescription(
+          description,
+          digiData.description
+        );
+
+      let digiPackage =
+        getPackage(digiData.description);
+
+      packageMatch =
+        packageType == digiPackage
+        ? "MATCH"
+        : "MISMATCH";
+    }
+
+    outputRows.push([
+
+      partNo,
+      description,
+      qty,
+      msl,
+      itemComments,
+      replaceItems,
+
+      parsed[0],
+      parsed[1],
+      parsed[2],
+
+      digiData ? digiData.packaging : "",
+
+      descMatch,     // EN DES VS PART DES
+
+      "",            // EN DES VS ALT PART DES
+
+      packageMatch,  // UNIQUE PACKAGE
+
+      digiData ? digiData.status : "",
+
+      digiData ? digiData.msl : "",
+
+      "",            // MAX SOLDERING TEMP
+
+      "",            // REMARKS
+
+      digiData ? "DIGIKEY" : "",
+
+      digiData ? digiData.datasheet : "",
+
+      digikeyFormula
+
+    ]);
+  }
+
+  if (outputRows.length > 0) {
+
+    outputSheet.getRange(
+      2,
+      1,
+      outputRows.length,
+      outputRows[0].length
+    ).setValues(outputRows);
+
+  }
+
+  Logger.log(
+    "Rows Processed: " + outputRows.length
+  );
+
+}
+
+function compareDescription(erpDesc, digiDesc) {
+
+  if (!erpDesc || !digiDesc) {
+    return "";
+  }
+
+  erpDesc = String(erpDesc).toUpperCase();
+  digiDesc = String(digiDesc).toUpperCase();
+
+  // PACKAGE CHECK
+
+  let packageERP = getPackage(erpDesc);
+  let packageDigi = getPackage(digiDesc);
+
+  let packageMatch =
+    packageERP &&
+    packageERP == packageDigi;
+
+  // TOLERANCE CHECK
+
+  let toleranceERP =
+    (erpDesc.match(/\d+%/) || [""])[0];
+
+  let toleranceDigi =
+    (digiDesc.match(/\d+%/) || [""])[0];
+
+  let toleranceMatch =
+    toleranceERP == toleranceDigi;
+
+  // RESISTANCE CHECK
+
+  let valueERP =
+    (erpDesc.match(/\d+\.?\d*[KMR]|[0-9]+(?:\.[0-9]+)?E/i) || [""])[0];
+
+  let valueDigi =
+    (digiDesc.match(/\d+\.?\d*\s*OHMS?|\d+\.?\d*[KMR]/i) || [""])[0];
+
+  valueERP =
+    valueERP
+      .replace(/OHMS?/gi, "")
+      .replace(/E$/i, "")
+      .trim();
+
+  valueDigi =
+    valueDigi
+      .replace(/OHMS?/gi, "")
+      .trim();
+
+  let valueMatch = false;
+
+  if (valueERP && valueDigi) {
+
+    let erpNum = parseFloat(valueERP);
+    let digiNum = parseFloat(valueDigi);
+
+    if (!isNaN(erpNum) && !isNaN(digiNum)) {
+
+      valueMatch =
+        Math.abs(erpNum - digiNum) < 0.01;
+
+    }
+
+  }
+
+  // WATTAGE CHECK
+
+  let wattERP =
+    (erpDesc.match(/1\/\d+W/i) || [""])[0];
+
+  let wattDigi =
+    (digiDesc.match(/1\/\d+W/i) || [""])[0];
+
+  let wattMatch = true;
+
+  if (wattERP && wattDigi) {
+
+    wattMatch =
+      wattERP.toUpperCase() ==
+      wattDigi.toUpperCase();
+
+  }
+
+  return (
+    packageMatch &&
+    toleranceMatch &&
+    valueMatch &&
+    wattMatch
+  )
+    ? "MATCH"
+    : "MISMATCH";
+
+}
+
+function testCompare() {
+
+  const erp =
+  "Res, Chip, 49.9E, 1/20W, 1%, 0201";
+
+  const digi =
+  "49.9 Ohms ±1% 0.05W, 1/20W Chip Resistor 0201 (0603 Metric) Thick Film";
+
+  Logger.log(
+    compareDescription(
+      erp,
+      digi
+    )
+  );
+
+}
+
+function getDigikeyLink(mpn) {
+
+  if (!mpn) {
+    return "";
+  }
+
+  return "https://www.digikey.com/en/products/result?keywords=" +
+         encodeURIComponent(mpn);
+
+}
+
+function getPackage(description) {
+
+  if (!description) {
+    return "";
+  }
+
+  const text = description.toUpperCase();
+
+  const packages = [
+    "0201",
+    "0402",
+    "0603",
+    "0805",
+    "1206",
+    "1210",
+    "1812",
+    "2512",
+    "SOT23",
+    "SOT223",
+    "SOIC8",
+    "QFN",
+    "QFP",
+    "BGA"
+  ];
+
+  for (let i = 0; i < packages.length; i++) {
+
+    if (text.includes(packages[i])) {
+      return "'" + packages[i];
+    }
+
+  }
+  
+
+  return "";
+}
+
+function onOpen() {
+
+  SpreadsheetApp.getUi()
+    .createMenu('BOM SCRUBBER')
+
+    .addItem('Full Scrub', 'fullScrub')
+
+    .addSeparator()
+
+    .addItem('Create Headers', 'createOutputHeaders')
+
+    .addItem('Process BOM', 'processBom')
+
+    .addSeparator()
+
+    .addItem('Reset Tool', 'resetBomScrubber')
+
+    .addItem('Clear Cache', 'clearCache')
+
+    .addItem(
+     'Test DigiKey API',
+     'testApiStatus'
+    )
+
+    .addItem(
+     'Open Dashboard',
+     'showDashboard'
+    )
+
+    .addItem(
+     'Download Report',
+     'exportScrubReport'
+    )
+
+    .addItem(
+     'Import Active Sheet To BOM_INPUT',
+     'importCurrentSheetToBomInput'
+    )
+
+
+
+    .addToUi();
+
+}
+
+function fullScrub() {
+
+  createOutputHeaders();
+
+  processBom();
+
+}
+
+function analyzeDescription(description) {
+
+  if (!description) {
+    return ["","",""];
+  }
+
+  let resistance = "";
+  let tolerance = "";
+  let power = "";
+
+  let rMatch = description.match(/(\d+\.?\d*[KMR]?)/i);
+
+  if(rMatch){
+    resistance = rMatch[1];
+  }
+
+  let tMatch = description.match(/(\d+%)/);
+
+  if(tMatch){
+    tolerance = tMatch[1];
+  }
+
+  let pMatch = description.match(/(\d+\/\d+W)/i);
+
+  if(pMatch){
+    power = pMatch[1];
+  }
+
+  return [
+    resistance,
+    tolerance,
+    power
+  ];
+
+}
+
+function testAnalysis() {
+
+  let result =
+  analyzeDescription(
+  "Res, Chip, 16.9K, 1/16W, 1%, 0402"
+  );
+
+  Logger.log(result);
+
+}
+
+function getDigikeyCredentials() {
+
+  const sheet =
+    SpreadsheetApp.getActiveSpreadsheet()
+    .getSheetByName("SECRETS");
+
+  const data = sheet.getDataRange().getValues();
+
+  let clientId = "";
+  let clientSecret = "";
+
+  for (let i = 0; i < data.length; i++) {
+
+    if (data[i][0] == "DIGIKEY_CLIENT_ID") {
+      clientId = data[i][1];
+    }
+
+    if (data[i][0] == "DIGIKEY_CLIENT_SECRET") {
+      clientSecret = data[i][1];
+    }
+
+  }
+
+  return {
+    clientId: clientId,
+    clientSecret: clientSecret
+  };
+}
+
+function testCredentials() {
+
+  const creds = getDigikeyCredentials();
+
+  Logger.log(creds.clientId);
+
+}
+
+function getDigikeyToken() {
+
+  const creds = getDigikeyCredentials();
+
+  const url =
+    "https://api.digikey.com/v1/oauth2/token";
+
+  const payload = {
+    grant_type: "client_credentials",
+    client_id: creds.clientId,
+    client_secret: creds.clientSecret
+  };
+
+  const options = {
+    method: "post",
+    payload: payload
+  };
+
+  const response =
+    UrlFetchApp.fetch(url, options);
+
+  const result =
+    JSON.parse(response.getContentText());
+
+  return result.access_token;
+
+}
+
+function testToken() {
+
+  const token = getDigikeyToken();
+
+  Logger.log(token);
+
+}
+
+function searchDigikeyPart() {
+
+  const token = getDigikeyToken();
+
+  const mpn = "RK73H1ETTP1692F";
+
+  const url =
+    "https://api.digikey.com/products/v4/search/" +
+    encodeURIComponent(mpn);
+
+  const options = {
+
+    method: "get",
+
+    headers: {
+      Authorization: "Bearer " + token,
+      "X-DIGIKEY-Client-Id":
+        getDigikeyCredentials().clientId,
+      Accept: "application/json"
+    },
+
+    muteHttpExceptions: true
+
+  };
+
+  const response =
+    UrlFetchApp.fetch(url, options);
+
+  Logger.log(response.getContentText());
+
+}
+
+
+function testKeywordSearch() {
+
+  const token = getDigikeyToken();
+
+  const url =
+    "https://api.digikey.com/products/v4/search/keyword";
+
+  const payload = {
+    Keywords: "RK73H1ETTP1692F",
+    Limit: 1,
+    Offset: 0
+  };
+
+  const options = {
+
+    method: "post",
+
+    contentType: "application/json",
+
+    headers: {
+      Authorization: "Bearer " + token,
+      "X-DIGIKEY-Client-Id":
+        getDigikeyCredentials().clientId,
+      "X-DIGIKEY-Locale-Site": "US",
+      "X-DIGIKEY-Locale-Language": "en",
+      "X-DIGIKEY-Locale-Currency": "USD"
+    },
+
+    payload: JSON.stringify(payload),
+
+    muteHttpExceptions: true
+
+  };
+
+  const response =
+    UrlFetchApp.fetch(url, options);
+
+  Logger.log(response.getContentText());
+
+}
+
+function extractDigikeyData() {
+
+  const token = getDigikeyToken();
+
+  const url =
+    "https://api.digikey.com/products/v4/search/keyword";
+
+  const payload = {
+    Keywords: "RK73H1ETTP1692F",
+    Limit: 1,
+    Offset: 0
+  };
+
+  const options = {
+
+    method: "post",
+    contentType: "application/json",
+
+    headers: {
+      Authorization: "Bearer " + token,
+      "X-DIGIKEY-Client-Id":
+        getDigikeyCredentials().clientId,
+      "X-DIGIKEY-Locale-Site": "US",
+      "X-DIGIKEY-Locale-Language": "en",
+      "X-DIGIKEY-Locale-Currency": "USD"
+    },
+
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
+
+  };
+
+  const response =
+    UrlFetchApp.fetch(url, options);
+
+  Logger.log(
+    "CODE = " +
+    response.getResponseCode()
+  );
+
+  if (response.getResponseCode() == 429) {
+
+    Logger.log(
+      "API LIMIT REACHED"
+    );
+
+    return;
+
+  }
+
+  const result =
+    JSON.parse(
+      response.getContentText()
+    );
+
+  if (
+    !result.Products ||
+    result.Products.length === 0
+  ) {
+
+    Logger.log(
+      "NO PRODUCT FOUND"
+    );
+
+    return;
+
+  }
+
+  const product =
+    result.Products[0];
+
+  Logger.log(
+    product.Description.ProductDescription
+  );
+
+  Logger.log(
+    product.DatasheetUrl
+  );
+
+  Logger.log(
+    product.ProductStatus.Status
+  );
+
+  Logger.log(
+    product.Classifications
+      .MoistureSensitivityLevel
+  );
+
+}
+
+
+function testPartLookup() {
+
+  const token =
+  getDigikeyToken();
+
+  const part =
+  getDigikeyPartData(
+    "RK73H1ETTP1692F",
+    token
+  );
+
+  Logger.log(part);
+
+}
+
+function getDigikeyPartData(mpn, token) {
+
+  if (!mpn) {
+    return null;
+  }
+
+  // STEP 1 : CACHE CHECK
+
+  const cacheData = getCacheData(mpn);
+
+  if (cacheData) {
+
+    Logger.log("CACHE HIT : " + mpn);
+
+    return cacheData;
+
+  }
+
+  const url =
+    "https://api.digikey.com/products/v4/search/keyword";
+
+  const payload = {
+    Keywords: mpn,
+    Limit: 1,
+    Offset: 0
+  };
+
+  const options = {
+
+    method: "post",
+    contentType: "application/json",
+
+    headers: {
+      Authorization: "Bearer " + token,
+      "X-DIGIKEY-Client-Id":
+        getDigikeyCredentials().clientId,
+      "X-DIGIKEY-Locale-Site": "US",
+      "X-DIGIKEY-Locale-Language": "en",
+      "X-DIGIKEY-Locale-Currency": "USD"
+    },
+
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
+
+  };
+
+  try {
+
+    const response =
+      UrlFetchApp.fetch(url, options);
+
+    const responseCode =
+      response.getResponseCode();
+
+    Logger.log(
+      "CODE = " + responseCode
+    );
+
+    // API LIMIT
+
+    if (responseCode == 429) {
+
+      return {
+
+        description: "",
+        datasheet: "",
+        status: "API LIMIT REACHED",
+        msl: "",
+        packaging: ""
+
+      };
+
+    }
+
+    // UNAUTHORIZED
+
+    if (responseCode == 401) {
+
+      return {
+
+        description: "",
+        datasheet: "",
+        status: "INVALID TOKEN",
+        msl: "",
+        packaging: ""
+
+      };
+
+    }
+
+    const result =
+      JSON.parse(
+        response.getContentText()
+      );
+
+    if (
+      !result.Products ||
+      result.Products.length === 0
+    ) {
+
+      return {
+
+        description: "",
+        datasheet: "",
+        status: "PART NOT FOUND",
+        msl: "",
+        packaging: ""
+
+      };
+
+    }
+
+    const p =
+      result.Products[0];
+
+    const resultData = {
+
+      description:
+        p.Description?.ProductDescription || "",
+
+      datasheet:
+        p.DatasheetUrl || "",
+
+      status:
+        p.ProductStatus?.Status || "",
+
+      msl:
+        p.Classifications
+          ?.MoistureSensitivityLevel || "",
+
+      packaging:
+        p.ProductVariations?.[0]
+          ?.PackageType?.Name || ""
+
+    };
+
+    // SAVE CACHE
+
+    saveCacheData(
+      mpn,
+      resultData
+    );
+
+    Logger.log(
+      "CACHE SAVE : " + mpn
+    );
+
+    return resultData;
+
+  } catch (err) {
+
+    Logger.log(err);
+
+    return {
+
+      description: "",
+      datasheet: "",
+      status: "ERROR",
+      msl: "",
+      packaging: ""
+
+    };
+
+  }
+
+}
+
+function testDigi() {
+
+  const token = getDigikeyToken();
+
+  let data =
+  getDigikeyPartData(
+    "RK73H1ETTP1692F",
+    token
+  );
+
+  Logger.log(data);
+
+}
+
+function getCacheData(mpn) {
+
+  const sheet =
+    SpreadsheetApp
+    .getActiveSpreadsheet()
+    .getSheetByName("DIGIKEY_CACHE");
+
+  const data =
+    sheet.getDataRange().getValues();
+
+  for(let i=1;i<data.length;i++){
+
+    if(data[i][0] == mpn){
+
+      return {
+
+        description:data[i][1],
+        packaging:data[i][2],
+        status:data[i][3],
+        msl:data[i][4],
+        datasheet:data[i][5]
+
+      };
+    }
+  }
+
+  return null;
+}
+
+function saveCacheData(
+  mpn,
+  digiData
+){
+
+  const sheet =
+    SpreadsheetApp
+    .getActiveSpreadsheet()
+    .getSheetByName("DIGIKEY_CACHE");
+
+  const data =
+    sheet.getDataRange().getValues();
+
+  for(let i=1;i<data.length;i++){
+
+    if(data[i][0] == mpn){
+
+      return;
+
+    }
+
+  }
+
+  sheet.appendRow([
+
+    mpn,
+    digiData.description,
+    digiData.packaging,
+    digiData.status,
+    digiData.msl,
+    digiData.datasheet
+
+  ]);
+
+}
+
+function resetBomScrubber() {
+
+  const ss =
+    SpreadsheetApp.getActiveSpreadsheet();
+
+  ss.getSheetByName("BOM_INPUT")
+    .clearContents();
+
+  ss.getSheetByName("SCRUB_OUTPUT")
+    .clearContents();
+
+  SpreadsheetApp.getUi().alert(
+    "BOM_INPUT and SCRUB_OUTPUT cleared successfully."
+  );
+
+}
+
+function clearCache() {
+
+  const sheet =
+    SpreadsheetApp
+    .getActiveSpreadsheet()
+    .getSheetByName("DIGIKEY_CACHE");
+
+  sheet.clearContents();
+
+  sheet.appendRow([
+    "MPN",
+    "DESCRIPTION",
+    "PACKAGING",
+    "STATUS",
+    "MSL",
+    "DATASHEET"
+  ]);
+
+  SpreadsheetApp.getUi().alert(
+    "Cache Cleared Successfully"
+  );
+
+}
+
+function testApiStatus() {
+
+  const token =
+    getDigikeyToken();
+
+  const data =
+    getDigikeyPartData(
+      "RK73H1ETTP1692F",
+      token
+    );
+
+  if (!data) {
+
+    SpreadsheetApp.getUi().alert(
+      "No Response From DigiKey"
+    );
+
+    return;
+  }
+
+  SpreadsheetApp.getUi().alert(
+    "Status : " + data.status +
+    "\nPackaging : " + data.packaging +
+    "\nMSL : " + data.msl
+  );
+
+}
+
+function showDashboard() {
+
+  const html =
+    HtmlService.createHtmlOutputFromFile("Dashboard")
+    .setWidth(900)
+    .setHeight(650);
+
+  SpreadsheetApp.getUi()
+    .showModalDialog(
+      html,
+      "BOM SCRUBBER DASHBOARD"
+    );
+
+}
+
+function getDashboardData() {
+
+  const sheet =
+    SpreadsheetApp
+      .getActiveSpreadsheet()
+      .getSheetByName("SCRUB_OUTPUT");
+
+  const data =
+    sheet.getDataRange().getValues();
+
+  let totalParts = Math.max(data.length - 1, 0);
+
+  let descMatch = 0;
+  let descMismatch = 0;
+
+  let packageMatch = 0;
+  let packageMismatch = 0;
+
+  let datasheets = 0;
+
+  for (let i = 1; i < data.length; i++) {
+
+    // K = EN DES VS PART DES
+
+    if (data[i][10] == "MATCH") {
+      descMatch++;
+    }
+
+    if (data[i][10] == "MISMATCH") {
+      descMismatch++;
+    }
+
+    // M = UNIQUE PACKAGE
+
+    if (data[i][12] == "MATCH") {
+      packageMatch++;
+    }
+
+    if (data[i][12] == "MISMATCH") {
+      packageMismatch++;
+    }
+
+    // S = Datasheet Link
+
+    if (data[i][18] != "") {
+      datasheets++;
+    }
+
+  }
+
+  return {
+
+    api: "READY",
+
+    cache: "READY",
+
+    version: "1.0",
+
+    totalParts: totalParts,
+
+    descMatch: descMatch,
+
+    descMismatch: descMismatch,
+
+    packageMatch: packageMatch,
+
+    packageMismatch: packageMismatch,
+
+    datasheets: datasheets,
+
+    lastRun:
+      Utilities.formatDate(
+        new Date(),
+        Session.getScriptTimeZone(),
+        "dd-MMM-yyyy HH:mm:ss"
+      )
+
+  };
+
+}
+
+function getSheetUrl() {
+
+  return SpreadsheetApp
+    .getActiveSpreadsheet()
+    .getUrl();
+
+}
+
+function exportScrubReport() {
+
+  const ss =
+    SpreadsheetApp.getActiveSpreadsheet();
+
+  const sourceSheet =
+    ss.getSheetByName("SCRUB_OUTPUT");
+
+  const timestamp =
+    Utilities.formatDate(
+      new Date(),
+      Session.getScriptTimeZone(),
+      "yyyyMMdd_HHmmss"
+    );
+
+  const tempSS =
+    SpreadsheetApp.create(
+      "BOM_SCRUB_REPORT_" + timestamp
+    );
+
+  const tempSheet =
+    tempSS.getSheets()[0];
+
+  tempSheet.setName("SCRUB_REPORT");
+
+  const data =
+    sourceSheet.getDataRange().getValues();
+
+  tempSheet.getRange(
+    1,
+    1,
+    data.length,
+    data[0].length
+  ).setValues(data);
+
+  SpreadsheetApp.flush();
+
+  const exportUrl =
+    "https://docs.google.com/spreadsheets/d/" +
+    tempSS.getId() +
+    "/export?format=xlsx";
+
+  return exportUrl;
+
+}
+
+function openScrubOutput() {
+
+  const sheet =
+    SpreadsheetApp
+      .getActiveSpreadsheet()
+      .getSheetByName("SCRUB_OUTPUT");
+
+  SpreadsheetApp
+    .getActiveSpreadsheet()
+    .setActiveSheet(sheet);
+
+}
+
+function testGetDigikeyPartData() {
+
+  const token = getDigikeyToken();
+
+  const data =
+    getDigikeyPartData(
+      "RK73H1ETTP1692F",
+      token
+    );
+
+  Logger.log(data);
+
+}
+
+function validateImportedBom() {
+
+  const sheet =
+    SpreadsheetApp
+      .getActiveSpreadsheet()
+      .getSheetByName("IMPORT_BOM");
+
+  if (!sheet) {
+
+    SpreadsheetApp.getUi().alert(
+      "IMPORT_BOM Sheet Not Found"
+    );
+
+    return;
+  }
+
+  const headers =
+    sheet
+      .getRange(
+        1,
+        1,
+        1,
+        sheet.getLastColumn()
+      )
+      .getValues()[0];
+
+  const report = [];
+
+  let readyForScrub = true;
+
+  // Part Number
+
+  if (
+    headers.includes("Part #") ||
+    headers.includes("ERP Part Number")
+  ) {
+
+    report.push(
+      "✓ Part Number Found"
+    );
+
+  } else {
+
+    report.push(
+      "✗ Part Number Missing"
+    );
+
+    readyForScrub = false;
+  }
+
+  // Description
+
+  if (
+    headers.includes("Description")
+  ) {
+
+    report.push(
+      "✓ Description Found"
+    );
+
+  } else {
+
+    report.push(
+      "✗ Description Missing"
+    );
+
+    readyForScrub = false;
+  }
+
+  // Qty
+
+  if (
+    headers.includes("Qty")
+  ) {
+
+    report.push(
+      "✓ Qty Found"
+    );
+
+  } else {
+
+    report.push(
+      "✗ Qty Missing"
+    );
+
+    readyForScrub = false;
+  }
+
+  // DigiKey Support
+
+  if (
+    headers.includes("MFG INFO")
+  ) {
+
+    report.push(
+      "✓ DigiKey Scrubbing Supported"
+    );
+
+  } else {
+
+    report.push(
+      "⚠ MFG INFO / MPN Not Found"
+    );
+
+    report.push(
+      "⚠ DigiKey Scrubbing Not Possible"
+    );
+
+    report.push(
+      "⚠ Manufacturer Part Number Required"
+    );
+
+    readyForScrub = false;
+  }
+
+  // Final Status
+
+  let finalMessage = "";
+
+  if (readyForScrub) {
+
+    finalMessage =
+      "BOM TYPE : DIGIKEY BOM\n\n" +
+      "STATUS : READY FOR SCRUBBING\n\n";
+
+  } else {
+
+    finalMessage =
+      "BOM TYPE : ERP BOM\n\n" +
+      "STATUS : NOT READY FOR DIGIKEY SCRUBBING\n\n" +
+      "REASON :\n" +
+      "Manufacturer Part Number (MPN) Missing\n\n" +
+      "REQUIRED :\n" +
+      "MFG INFO Column\n" +
+      "OR\n" +
+      "Manufacturer Part Number Column\n\n";
+
+  }
+
+  finalMessage +=
+    "VALIDATION REPORT\n\n" +
+    report.join("\n");
+
+  SpreadsheetApp
+    .getUi()
+    .alert(finalMessage);
+
+}
+
+function convertImportedBom() {
+
+  const ss =
+    SpreadsheetApp.getActiveSpreadsheet();
+
+  const importSheet =
+    ss.getSheetByName("IMPORT_BOM");
+
+  const bomSheet =
+    ss.getSheetByName("BOM_INPUT");
+
+  if (!importSheet) {
+
+    SpreadsheetApp.getUi().alert(
+      "IMPORT_BOM Sheet Not Found"
+    );
+
+    return;
+  }
+
+  const data =
+    importSheet.getDataRange().getValues();
+
+  if (data.length < 2) {
+
+    SpreadsheetApp.getUi().alert(
+      "No BOM Data Found"
+    );
+
+    return;
+  }
+
+  const headers = data[0];
+
+  const partCol =
+    headers.indexOf("Part #");
+
+  const descCol =
+    headers.indexOf("Description");
+
+  const qtyCol =
+    headers.indexOf("Qty");
+
+  const mslCol =
+    headers.indexOf("MSL Value");
+
+  const commentsCol =
+    headers.indexOf("Item Comments");
+
+  const output = [];
+
+  for (let i = 1; i < data.length; i++) {
+
+    const row = data[i];
+
+    output.push([
+
+      row[partCol],     // A
+
+      "",               // B
+
+      "",               // C
+
+      row[descCol],     // D
+
+      "",               // E
+
+      row[qtyCol],      // F
+
+      "", "", "", "", "", "", "",
+
+      "",               // N MFG INFO
+
+      "", "",
+
+      row[mslCol],      // Q
+
+      "", "", "",
+
+      row[commentsCol], // V
+
+      "",
+
+      ""                // X
+
+    ]);
+
+  }
+
+  bomSheet.clearContents();
+
+  bomSheet
+    .getRange(
+      2,
+      1,
+      output.length,
+      output[0].length
+    )
+    .setValues(output);
+
+  SpreadsheetApp.getUi().alert(
+    "BOM Successfully Converted To BOM_INPUT"
+  );
+
+}
+
+function smartScrub() {
+
+  try {
+
+    validateImportedBom();
+
+    convertImportedBom();
+
+    fullScrub();
+
+    SpreadsheetApp.getUi().alert(
+      "✅ Smart Scrub Completed Successfully"
+    );
+
+  } catch(err) {
+
+    SpreadsheetApp.getUi().alert(
+      "❌ Smart Scrub Failed\n\n" +
+      err
+    );
+
+  }
+
+}
+
+function showUploadBom() {
+
+  const html =
+    HtmlService
+      .createHtmlOutputFromFile(
+        "UploadBom"
+      )
+      .setWidth(600)
+      .setHeight(400);
+
+  SpreadsheetApp
+    .getUi()
+    .showModalDialog(
+      html,
+      "Upload BOM"
+    );
+
+}
+
+function saveImportedBom(data) {
+
+  const ss =
+    SpreadsheetApp.getActiveSpreadsheet();
+
+  let sheet =
+    ss.getSheetByName("IMPORT_BOM");
+
+  if (!sheet) {
+
+    sheet =
+      ss.insertSheet("IMPORT_BOM");
+
+  }
+
+  sheet.clearContents();
+
+  sheet
+    .getRange(
+      1,
+      1,
+      data.length,
+      data[0].length
+    )
+    .setValues(data);
+
+  return (
+    "✅ BOM Imported Successfully\n\n" +
+    "Rows : " +
+    (data.length - 1)
+  );
+
+}
+
+function importCurrentSheetToBomInput() {
+
+const ss =
+SpreadsheetApp.getActiveSpreadsheet();
+
+const sourceSheet =
+ss.getActiveSheet();
+
+const targetSheet =
+ss.getSheetByName("BOM_INPUT");
+
+if (!targetSheet) {
+
+```
+SpreadsheetApp.getUi().alert(
+  "BOM_INPUT Sheet Not Found"
+);
+
+return;
+```
+
+}
+
+const data =
+sourceSheet
+.getDataRange()
+.getValues();
+
+targetSheet.clearContents();
+
+targetSheet
+.getRange(
+1,
+1,
+data.length,
+data[0].length
+)
+.setValues(data);
+
+SpreadsheetApp.getUi().alert(
+"✅ Data Imported To BOM_INPUT\n\nRows : " +
+(data.length - 1)
+);
+
+}

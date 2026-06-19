@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Event Dashboard</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+
+<style>
+body{
+font-family:Arial;
+padding:20px;
+}
+
+.card{
+border:1px solid #ccc;
+padding:15px;
+margin:10px;
+display:inline-block;
+width:220px;
+border-radius:10px;
+}
+
+table{
+border-collapse:collapse;
+width:100%;
+margin-top:20px;
+}
+
+th,td{
+border:1px solid #ccc;
+padding:8px;
+text-align:left;
+}
+</style>
+
+</head>
+
+<body>
+
+<h1>Event Dashboard</h1>
+
+<div class="card">
+<h3>Total Visitors</h3>
+<h2 id="totalVisitors">0</h2>
+</div>
+
+<div class="card">
+<h3>Total Entered</h3>
+<h2 id="totalEntered">0</h2>
+</div>
+
+<div class="card">
+<h3>Walk-In Visitors</h3>
+<h2 id="walkinCount">0</h2>
+</div>
+
+<div class="card">
+<h3>Pre Registered</h3>
+<h2 id="preCount">0</h2>
+</div>
+
+<div class="card">
+<h3>New Registrations</h3>
+<h2 id="newCount">0</h2>
+</div>
+
+<h2>Recent Entries</h2>
+
+<table>
+
+<thead>
+<tr>
+<th>Visitor ID</th>
+<th>Name</th>
+<th>Company</th>
+<th>Entry Time</th>
+</tr>
+</thead>
+
+<tbody id="entryTable">
+</tbody>
+
+</table>
+
+<script>
+
+const SUPABASE_URL =
+'https://jffrobtbkywciulkukws.supabase.co';
+
+const SUPABASE_KEY =
+'sb_publishable_QC80NvmijShSDjgPLH6NNA_a4GtfG7w';
+
+const client =
+supabase.createClient(
+SUPABASE_URL,
+SUPABASE_KEY
+);
+
+loadDashboard();
+
+setInterval(loadDashboard,10000);
+
+async function loadDashboard(){
+
+const { data: visitors } =
+await client
+.from('visitors')
+.select('*');
+
+document.getElementById('totalVisitors').innerText =
+visitors.length;
+
+document.getElementById('totalEntered').innerText =
+visitors.filter(
+v => v.entry_status === 'Entered'
+).length;
+
+document.getElementById('walkinCount').innerText =
+visitors.filter(
+v => v.registration_type === 'Walk-In'
+).length;
+
+document.getElementById('preCount').innerText =
+visitors.filter(
+v => v.registration_type === 'Pre Registered'
+).length;
+
+document.getElementById('newCount').innerText =
+visitors.length;
+
+const entered =
+visitors
+.filter(v => v.entry_status === 'Entered')
+.sort(
+(a,b)=>
+new Date(b.entry_time)
+-
+new Date(a.entry_time)
+)
+.slice(0,20);
+
+let html='';
+
+entered.forEach(v=>{
+
+html += `
+<tr>
+<td>${v.visitor_id}</td>
+<td>${v.name}</td>
+<td>${v.company}</td>
+<td>
+${
+v.entry_time
+? new Date(v.entry_time).toLocaleString(
+'en-IN',
+{
+day:'2-digit',
+month:'2-digit',
+year:'numeric',
+hour:'2-digit',
+minute:'2-digit',
+second:'2-digit'
+}
+)
+: ''
+}
+</td>
+</tr>
+`;
+
+});
+
+document.getElementById('entryTable').innerHTML =
+html;
+
+}
+
+</script>
+
+</body>
+</html>
