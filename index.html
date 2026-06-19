@@ -1,36 +1,28 @@
 <!DOCTYPE html>
+
 <html>
 <head>
 <title>Prajjwal Tiwari Portfolio</title>
 
 <style>
-.card{
-background:white;
-padding:20px;
-margin-top:20px;
-border-radius:10px;
-box-shadow:0 2px 10px rgba(0,0,0,0.1);
+*{
+margin:0;
+padding:0;
+box-sizing:border-box;
 }
 
-.project{
-background:white;
-padding:20px;
-margin-top:20px;
-border-left:5px solid #0f4c81;
-border-radius:8px;
-box-shadow:0 2px 10px rgba(0,0,0,0.1);
-}  
 body{
-font-family:Arial,sans-serif;
-margin:0;
+font-family:Arial, sans-serif;
 background:#f4f6f8;
+color:#333;
+line-height:1.6;
 }
 
 .hero{
 background:#0f4c81;
 color:white;
 text-align:center;
-padding:60px 20px;
+padding:70px 20px;
 }
 
 .hero h1{
@@ -39,19 +31,77 @@ margin-bottom:10px;
 }
 
 .hero h2{
-font-size:22px;
+font-size:24px;
 font-weight:normal;
+margin-bottom:10px;
 }
 
 .hero p{
 font-size:18px;
-margin-top:20px;
 }
 
-.section{
-max-width:1000px;
+.container{
+max-width:1100px;
 margin:auto;
-padding:30px;
+padding:30px 20px;
+}
+
+.card{
+background:white;
+padding:25px;
+margin-bottom:25px;
+border-radius:12px;
+box-shadow:0 2px 10px rgba(0,0,0,0.08);
+}
+
+.card h2{
+margin-bottom:15px;
+color:#0f4c81;
+}
+
+.project{
+background:#fafafa;
+padding:20px;
+margin-top:15px;
+border-left:5px solid #0f4c81;
+border-radius:8px;
+}
+
+.project h3{
+margin-bottom:10px;
+}
+
+.skills{
+display:flex;
+flex-wrap:wrap;
+gap:10px;
+}
+
+.skill{
+background:#0f4c81;
+color:white;
+padding:8px 14px;
+border-radius:20px;
+font-size:14px;
+}
+
+.contact a{
+display:inline-block;
+margin-right:10px;
+margin-top:10px;
+padding:10px 18px;
+background:#0f4c81;
+color:white;
+text-decoration:none;
+border-radius:6px;
+}
+
+.footer{
+background:#0f4c81;
+color:white;
+text-align:center;
+padding:15px;
+margin-top:30px;
 }
 </style>
 
@@ -60,45 +110,36 @@ padding:30px;
 <body>
 
 <div class="hero">
-
 <h1>Prajjwal Tiwari</h1>
 
 <h2>NPI Engineer @ VVDN Technologies</h2>
 
-<p>
-Manufacturing Automation Developer
-</p>
+<p>Manufacturing Automation Developer</p>
+
+<br>
 
 <p>
-6.8+ Years Experience in NPI | Proto Build | PVT | MP Handover |
-RCA | CAPA | ECN | MES | Process Improvement
+6.8+ Years Experience in NPI | Proto Build | PVT | MP Handover | RCA | CAPA | ECN | MES | Process Improvement
 </p>
-
 </div>
 
-<div class="section">
+<div class="container">
 
 <div class="card">
-
 <h2>About Me</h2>
 
-</div>  
-  
 <p>
-Manufacturing Automation and NPI Engineer with 6.8+ years of experience in product introduction, process validation, MES coordination, RCA, CAPA, fixture validation and production handover.
+Manufacturing Automation and NPI Engineer with 6.8+ years of experience in product introduction, process validation, MES coordination, RCA, CAPA, fixture validation, ECN management and production handover.
+
+Experienced in workflow automation, dashboard development, QR systems, BOM validation and process improvement projects.
+
 </p>
-
 </div>
-<div class="section">
 
-<div class="card">  
-
+<div class="card">
 <h2>Professional Experience</h2>
 
-</div>  
-
 <h3>VVDN Technologies</h3>
-
 <p><b>NPI Engineer</b></p>
 
 <ul>
@@ -110,34 +151,74 @@ Manufacturing Automation and NPI Engineer with 6.8+ years of experience in produ
 <li>Cycle Time and Cost Improvement</li>
 <li>Cross Functional Team Coordination</li>
 </ul>
-
 </div>
-<div class="card">
 
+<div class="card">
 <h2>Featured Projects</h2>
 
 <div class="project">
 <h3>BOM Scrubber</h3>
 <p>
-Automated BOM validation platform using DigiKey API and Google Sheets.
+Automated BOM validation platform using DigiKey API, Google Sheets and Apps Script.
 </p>
 </div>
 
 <div class="project">
 <h3>Event Visitor Management System</h3>
 <p>
-QR based visitor registration, verification and attendance management system.
+QR based visitor registration, verification and attendance management platform.
 </p>
 </div>
 
 <div class="project">
 <h3>Task Management System</h3>
 <p>
-Workflow based task tracking and team management platform.
+Workflow based task management and automation platform for manufacturing teams.
 </p>
 </div>
 
 </div>
-  
+
+<div class="card">
+<h2>Skills</h2>
+
+<div class="skills">
+<div class="skill">NPI</div>
+<div class="skill">RCA</div>
+<div class="skill">CAPA</div>
+<div class="skill">PFMEA</div>
+<div class="skill">Control Plan</div>
+<div class="skill">MES</div>
+<div class="skill">Google Apps Script</div>
+<div class="skill">JavaScript</div>
+<div class="skill">HTML/CSS</div>
+<div class="skill">Supabase</div>
+<div class="skill">API Integration</div>
+<div class="skill">Manufacturing Automation</div>
+</div>
+
+</div>
+
+<div class="card contact">
+<h2>Contact</h2>
+
+<a href="mailto:prajjwaltiwari92@gmail.com">Email</a>
+
+<a href="https://github.com/prajjwal-tiwari" target="_blank">GitHub</a>
+
+<a href="https://www.linkedin.com/in/prajjwal-tiwari-b66096301" target="_blank">LinkedIn</a>
+
+<p style="margin-top:15px;">
+Location: Gurgaon, India
+</p>
+
+</div>
+
+</div>
+
+<div class="footer">
+© 2026 Prajjwal Tiwari
+</div>
+
 </body>
 </html>
